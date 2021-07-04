@@ -106,7 +106,7 @@ async fn handle_conect<'h, 'b>(conn: Connect<'h, 'b>) -> Option<TcpStream> {
         ).as_bytes())
         .await
         .unwrap();
-    io::copy_bidirectional(conn.stream, &mut remote_stream)
+    let n = io::copy_bidirectional(conn.stream, &mut remote_stream)
         .await
         .unwrap();
     Some(remote_stream)
