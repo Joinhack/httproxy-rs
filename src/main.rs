@@ -1,14 +1,13 @@
-use bytes::{BytesMut, BufMut};
+use bytes::{BufMut, BytesMut};
 use httparse::{self, Status};
 use std::net::SocketAddr;
-use tokio::io::{self, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
+use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::runtime::{Builder, Runtime};
+use tokio::runtime::Builder;
 
 struct Connect<'h, 'b> {
     stream: &'b mut TcpStream,
-    addr: SocketAddr,
-    buf: &'b [u8],
+    buf: &'b BytesMut,
     headers_len: usize,
     req: httparse::Request<'h, 'b>,
 }
@@ -16,14 +15,12 @@ struct Connect<'h, 'b> {
 impl<'h, 'b> Connect<'h, 'b> {
     fn new(
         stream: &'b mut TcpStream,
-        addr: SocketAddr,
-        buf: &'b [u8],
+        buf: &'b BytesMut,
         headers_len: usize,
         req: httparse::Request<'h, 'b>,
     ) -> Self {
         Connect {
             stream,
-            addr,
             buf,
             headers_len,
             req,
@@ -49,7 +46,7 @@ async fn write_conn(conn: &Connect<'_, '_>, uri: &str, writer: &mut TcpStream) {
     });
     buf.put_slice(b"\r\n");
     println!("{:?}", buf);
-    writer.write_all(&buf[..]).await;
+    writer.write_all(&buf[..]).await.unwrap();
 }
 
 fn get_host_port<'h>(req: &httparse::Request<'h, '_>) -> (&'h str, String) {
@@ -72,27 +69,54 @@ fn get_host_port<'h>(req: &httparse::Request<'h, '_>) -> (&'h str, String) {
     (raw_host, remote)
 }
 
-async fn handle<'h, 'b>(mut conn:  Connect<'h, 'b>) {
+async fn handle<'h, 'b>(conn: Connect<'h, 'b>, r: &mut Option<TcpStream>) {
     let req = &conn.req;
-    
-    let path: &str = req.path.unwrap();
+    let mut remote = if r.is_none() { None } else { r.take() };
+    if remote.is_none() {
+        let path: &str = req.path.unwrap();
+        let (raw_host, remote_addr) = get_host_port(req);
+        let n = path.find(raw_host).expect("not match host for path");
+        let uri = &path[n + raw_host.len()..];
+        let mut remote_stream = TcpStream::connect(remote_addr)
+            .await
+            .expect(&format!("connect host:{} error", raw_host));
+        write_conn(&conn, uri, &mut remote_stream).await;
+        remote = Some(remote_stream);
+    }
+    let mut remote_stream = remote.unwrap();
+    let remaind = &conn.buf[conn.headers_len..];
+    if remaind.len() > 0 {
+        remote_stream.write_all(remaind).await.unwrap();
+    }
+    io::copy_bidirectional(conn.stream, &mut remote_stream)
+        .await
+        .unwrap();
+}
+
+async fn handle_conect<'h, 'b>(conn: Connect<'h, 'b>) -> Option<TcpStream> {
+    let req = &conn.req;
     let (raw_host, remote) = get_host_port(req);
-    let n = path.find(raw_host).expect("not match host for path");
-    let uri = &path[n + raw_host.len()..];
     let mut remote_stream = TcpStream::connect(remote)
         .await
         .expect(&format!("connect host:{} error", raw_host));
-    println!("{:?}", remote_stream);
-    write_conn(&conn, uri, &mut remote_stream).await;
-    io::copy_bidirectional(conn.stream, &mut remote_stream).await;
+    conn.stream
+        .write_all(format!(
+            "HTTP/1.{} 200 Connection Established\r\n\r\n",
+            req.version.unwrap()
+        ).as_bytes())
+        .await
+        .unwrap();
+    io::copy_bidirectional(conn.stream, &mut remote_stream)
+        .await
+        .unwrap();
+    Some(remote_stream)
 }
-
-async fn handle_conect() {}
 
 async fn process_client(mut tcp_stream: TcpStream, addr: SocketAddr) {
     let mut buf = BytesMut::with_capacity(1024);
+    let mut remote: Option<TcpStream> = None;
     loop {
-        let n = match tcp_stream.read_buf(&mut buf).await {
+        let _ = match tcp_stream.read_buf(&mut buf).await {
             Ok(0) => {
                 println!("closed by client:{}", addr);
                 return;
@@ -112,9 +136,12 @@ async fn process_client(mut tcp_stream: TcpStream, addr: SocketAddr) {
         };
 
         if let Some("CONNECT") = req.method {
+            let conn = Connect::new(&mut tcp_stream, &buf, n, req);
+            remote = handle_conect(conn).await;
+            buf.clear();
         } else {
-            let mut conn = Connect::new(&mut tcp_stream, addr, &buf[..], n, req);
-            handle(conn).await
+            let conn = Connect::new(&mut tcp_stream, &buf, n, req);
+            handle(conn, &mut remote).await;
         }
     }
 }
