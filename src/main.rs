@@ -5,19 +5,16 @@ use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::runtime::Builder;
 
-
 struct Connect {
     stream: TcpStream,
     buf: BytesMut,
     http_version: u8,
-    is_connect_method: bool, 
+    is_connect_method: bool,
     remote: Option<TcpStream>,
 }
 
 impl Connect {
-    fn new(
-        stream: TcpStream
-    ) -> Self {
+    fn new(stream: TcpStream) -> Self {
         Connect {
             stream,
             is_connect_method: false,
@@ -60,22 +57,23 @@ impl Connect {
     }
 
     async fn copy_bidirectional(&mut self) {
-        let stream:& mut TcpStream = &mut self.stream;
+        let stream: &mut TcpStream = &mut self.stream;
         let remote = self.remote.as_mut().unwrap();
         if self.is_connect_method {
             stream
-            .write_all(format!(
-                "HTTP/1.{} 200 Connection Established\r\n\r\n",
-                self.http_version
-            ).as_bytes())
-            .await
-            .unwrap();
+                .write_all(
+                    format!(
+                        "HTTP/1.{} 200 Connection Established\r\n\r\n",
+                        self.http_version
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .unwrap();
         } else {
             remote.write_all(&self.buf[..]).await.unwrap();
         }
-        let _ = io::copy_bidirectional(stream, remote)
-            .await
-            .unwrap();
+        let _ = io::copy_bidirectional(stream, remote).await.unwrap();
     }
 
     async fn handle_connect(req: &httparse::Request<'_, '_>) -> Option<TcpStream> {
@@ -113,7 +111,6 @@ async fn linstener_work(listener: &TcpListener) {
         tokio::spawn(async move {
             let mut conn = Connect::new(tcp_stream);
             conn.process_remote(addr).await;
-
         });
     }
 }
