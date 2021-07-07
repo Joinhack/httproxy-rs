@@ -25,7 +25,7 @@ impl Connect {
     }
 
     async fn process_remote(&mut self, addr: SocketAddr) {
-        loop {
+        while self.remote.is_none() {
             let _ = match self.stream.read_buf(&mut self.buf).await {
                 Ok(0) => {
                     println!("closed by client:{}", addr);
@@ -45,13 +45,12 @@ impl Connect {
                 }
             };
             self.http_version = req.version.unwrap();
-            if let Some("CONNECT") = req.method {
-                self.is_connect_method = true;
+            self.is_connect_method = if let Some("CONNECT") = req.method {
+                 true
             } else {
-                self.is_connect_method = false;
-            }
+                false
+            };
             self.remote = Self::handle_connect(&req).await;
-            break;
         }
         self.copy_bidirectional().await;
     }
