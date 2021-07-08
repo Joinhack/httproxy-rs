@@ -1,4 +1,4 @@
-use bytes::{BufMut, BytesMut};
+use bytes::{BytesMut};
 use httparse::{self, Status};
 use std::net::SocketAddr;
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
@@ -50,7 +50,7 @@ impl Connect {
             } else {
                 false
             };
-            self.remote = Self::handle_connect(&req).await;
+            self.remote = handle_connect(&req).await;
         }
         self.copy_bidirectional().await;
     }
@@ -74,34 +74,34 @@ impl Connect {
         }
         let _ = io::copy_bidirectional(stream, remote).await.unwrap();
     }
+}
 
-    async fn handle_connect(req: &httparse::Request<'_, '_>) -> Option<TcpStream> {
-        let (raw_host, remote) = Self::get_host_port(req);
-        let remote_stream = TcpStream::connect(remote)
-            .await
-            .expect(&format!("connect host:{} error", raw_host));
-        Some(remote_stream)
-    }
+async fn handle_connect(req: &httparse::Request<'_, '_>) -> Option<TcpStream> {
+    let (raw_host, remote) = get_host_port(req);
+    let remote_stream = TcpStream::connect(remote)
+        .await
+        .expect(&format!("connect host:{} error", raw_host));
+    Some(remote_stream)
+}
 
-    fn get_host_port<'h>(req: &httparse::Request<'h, '_>) -> (&'h str, String) {
-        let host = req
-            .headers
-            .iter()
-            .rev()
-            .find(|h| *h != &httparse::EMPTY_HEADER && h.name == "Host")
-            .expect("no host found in header");
-        let raw_host = std::str::from_utf8(host.value).expect("error char encode for hosts");
-        let hosts = raw_host.split(":").collect::<Vec<&str>>();
-        let port = if hosts.len() == 2 {
-            let port: i32 = hosts[1].parse().unwrap();
-            port
-        } else {
-            80
-        };
-        let host = hosts[0];
-        let remote = format!("{}:{}", host, port);
-        (raw_host, remote)
-    }
+fn get_host_port<'h>(req: &httparse::Request<'h, '_>) -> (&'h str, String) {
+    let host = req
+        .headers
+        .iter()
+        .rev()
+        .find(|h| *h != &httparse::EMPTY_HEADER && h.name == "Host")
+        .expect("no host found in header");
+    let raw_host = std::str::from_utf8(host.value).expect("error char encode for hosts");
+    let hosts = raw_host.split(":").collect::<Vec<&str>>();
+    let port = if hosts.len() == 2 {
+        let port: i32 = hosts[1].parse().unwrap();
+        port
+    } else {
+        80
+    };
+    let host = hosts[0];
+    let remote = format!("{}:{}", host, port);
+    (raw_host, remote)
 }
 
 async fn linstener_work(listener: &TcpListener) {
