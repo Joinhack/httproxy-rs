@@ -1,6 +1,7 @@
 use bytes::{BytesMut};
 use httparse::{self, Status};
 use std::net::SocketAddr;
+use std::panic::{set_hook, PanicInfo};
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::runtime::Builder;
@@ -104,11 +105,25 @@ fn get_host_port<'h>(req: &httparse::Request<'h, '_>) -> (&'h str, String) {
     (raw_host, remote)
 }
 
+fn panic_hook(info: &PanicInfo<'_>) {
+    if let Some(s) = info.payload().downcast_ref::<String>() {
+        if let Some(loc) = info.location() {
+            eprintln!("file:{}:{} {}", loc.file(), loc.line(), s);
+        } else {
+            eprintln!("{}", s);
+        }
+    } else {
+        eprintln!("{:?}", info);
+    }
+    
+}
+
 async fn linstener_work(listener: &TcpListener) {
     loop {
         let (tcp_stream, addr) = listener.accept().await.unwrap();
         tokio::spawn(async move {
             let mut conn = Connect::new(tcp_stream);
+            set_hook(Box::new(panic_hook));
             conn.process_remote(addr).await;
         });
     }
