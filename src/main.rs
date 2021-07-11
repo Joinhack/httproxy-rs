@@ -96,13 +96,20 @@ async fn handle_connect(req: &httparse::Request<'_, '_>) -> Option<TcpStream> {
 }
 
 fn get_host_port<'h>(req: &httparse::Request<'h, '_>) -> (&'h str, String) {
-    let host = req
-        .headers
-        .iter()
-        .rev()
-        .find(|h| *h != &httparse::EMPTY_HEADER && h.name == "Host")
-        .expect("no host found in header");
-    let raw_host = std::str::from_utf8(host.value).expect("error char encode for hosts");
+    let raw_host = {
+        if matches!(req.method, Some("CONNECT")) {
+            req.path.unwrap()
+        } else {
+            let host = req
+                .headers
+                .iter()
+                .rev()
+                .find(|h| *h != &httparse::EMPTY_HEADER && h.name == "Host")
+                .expect("no host found in headers");
+            std::str::from_utf8(host.value).expect("error char encode for hosts")
+        }
+    };
+    
     let hosts = raw_host.split(":").collect::<Vec<&str>>();
     let port = if hosts.len() == 2 {
         let port: i32 = hosts[1].parse().unwrap();
