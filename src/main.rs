@@ -6,6 +6,9 @@ use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::runtime::Builder;
 
+const MIN_SIZE_HEADERS:usize = 16;
+const MAX_SIZE_HEADERS:usize = 256;
+
 struct Connect {
     stream: TcpStream,
     buf: BytesMut,
@@ -35,9 +38,16 @@ impl Connect {
                 Ok(n) => n,
                 Err(_) => return,
             };
-            let mut headers = [httparse::EMPTY_HEADER; 32];
+            let mut head_vec;
+            let mut headers = [httparse::EMPTY_HEADER; MIN_SIZE_HEADERS];
             let mut req = httparse::Request::new(&mut headers);
-            let _ = match req.parse(&self.buf[..]) {
+            let mut res = req.parse(&self.buf[..]);
+            if matches!(res, Err(httparse::Error::TooManyHeaders)) {
+                head_vec = vec![httparse::EMPTY_HEADER; MAX_SIZE_HEADERS];
+                req = httparse::Request::new(&mut head_vec);
+                res = req.parse(&self.buf[..]);
+            }
+            let _ = match res {
                 Ok(Status::Partial) => continue,
                 Ok(Status::Complete(n)) => n,
                 Err(e) => {
