@@ -1,6 +1,6 @@
 use std::panic::{set_hook, PanicInfo};
-use tokio::runtime::Builder;
 use tokio::net::TcpListener;
+use tokio::runtime::Builder;
 
 mod conn;
 use conn::*;
@@ -15,7 +15,6 @@ fn panic_hook(info: &PanicInfo<'_>) {
     } else {
         eprintln!("{:?}", info);
     }
-    
 }
 
 async fn linstener_work(listener: &TcpListener) {

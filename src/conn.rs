@@ -1,12 +1,12 @@
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
-use bytes::{BytesMut};
+use bytes::BytesMut;
 use httparse::{self, Status};
 use std::net::SocketAddr;
 
-const MIN_SIZE_HEADERS:usize = 16;
-const MAX_SIZE_HEADERS:usize = 256;
+const MIN_SIZE_HEADERS: usize = 16;
+const MAX_SIZE_HEADERS: usize = 256;
 
 pub(crate) struct Connect {
     stream: TcpStream,
@@ -56,7 +56,7 @@ impl Connect {
             };
             self.http_version = req.version.unwrap();
             self.is_connect_method = if let Some("CONNECT") = req.method {
-                 true
+                true
             } else {
                 false
             };
@@ -108,7 +108,7 @@ fn get_host_port<'h>(req: &httparse::Request<'h, '_>) -> (&'h str, String) {
             std::str::from_utf8(host.value).expect("error char encode for hosts")
         }
     };
-    
+
     let hosts = raw_host.split(":").collect::<Vec<&str>>();
     let port = if hosts.len() == 2 {
         let port: i32 = hosts[1].parse().unwrap();
