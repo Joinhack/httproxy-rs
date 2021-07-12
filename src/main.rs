@@ -2,6 +2,9 @@ use std::panic::{set_hook, PanicInfo};
 use tokio::net::TcpListener;
 use tokio::runtime::Builder;
 
+use getopts::Options;
+use std::env;
+
 mod conn;
 use conn::*;
 
@@ -28,10 +31,31 @@ async fn linstener_work(listener: &TcpListener) {
     }
 }
 
+fn print_usage(prg: &str, opts: &Options) {
+    let brief = format!("Usage: {} FILE [options]", prg);
+    print!("{}", opts.usage(&brief));
+}
+
 fn main() {
+    let args = env::args().collect::<Vec<String>>();
+    let mut opts = Options::new();
+    opts.optopt("l", "", "set listener address default:0.0.0.0:8080", "Listener");
+    let matcher = match opts.parse(&args[1..]) {
+        Ok(m) => m,
+        Err(_) => {
+            print_usage(&args[0], &opts);
+            return;
+        },
+    };
+
+    let addr = match matcher.opt_str("l") {
+        Some(addr) => addr,
+        None => "0.0.0.0:8080".into(),
+    };
+
     let rt = Builder::new_current_thread().enable_all().build().unwrap();
     rt.block_on(async {
-        let listener = TcpListener::bind("0.0.0.0:8080").await.unwrap();
+        let listener = TcpListener::bind(&addr).await.unwrap();
         linstener_work(&listener).await;
     });
 }
