@@ -4,9 +4,63 @@ use tokio::runtime::Builder;
 
 use getopts::Options;
 use std::env;
+use std::sync::Arc;
 
 mod conn;
 use conn::*;
+
+#[derive(Clone)]
+struct Server {
+    inner: Arc<ServerInner>,
+}
+
+struct ServerInner {
+    listener_addr: String,
+    username: String,
+    password: String,
+    listener: TcpListener,
+}
+
+impl Server {
+    fn new(
+        listener_addr: String,
+        username: String,
+        password: String,
+        listener: TcpListener,
+        
+    ) -> Server {
+        Server {
+            inner: Arc::new(ServerInner {
+                listener_addr,
+                listener,
+                username,
+                password,
+            })
+        }
+    }
+
+    fn listener_addr_ref(&self) -> &str {
+        &self.inner.listener_addr
+    }
+
+
+    fn listener_ref(&self) -> &TcpListener {
+        &self.inner.listener
+    }
+
+    async fn listener_work(&self) {
+        let listener = self.listener_ref();
+        loop {
+            let (tcp_stream, addr) = listener.accept().await.unwrap();
+            let server = self.clone();
+            tokio::spawn(async move {
+                let mut conn = Connect::new(tcp_stream, server);
+                set_hook(Box::new(panic_hook));
+                conn.process_remote(addr).await;
+            });
+        }
+    }
+}
 
 fn panic_hook(info: &PanicInfo<'_>) {
     if let Some(s) = info.payload().downcast_ref::<String>() {
@@ -17,17 +71,6 @@ fn panic_hook(info: &PanicInfo<'_>) {
         }
     } else {
         eprintln!("{:?}", info);
-    }
-}
-
-async fn linstener_work(listener: &TcpListener) {
-    loop {
-        let (tcp_stream, addr) = listener.accept().await.unwrap();
-        tokio::spawn(async move {
-            let mut conn = Connect::new(tcp_stream);
-            set_hook(Box::new(panic_hook));
-            conn.process_remote(addr).await;
-        });
     }
 }
 
@@ -45,6 +88,18 @@ fn main() {
         "set listener address default:0.0.0.0:8080",
         "Listener",
     );
+    opts.optopt(
+        "p",
+        "",
+        "set password",
+        "Password",
+    );
+    opts.optopt(
+        "u",
+        "",
+        "set username",
+        "Username",
+    );
     let matcher = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(_) => {
@@ -58,9 +113,20 @@ fn main() {
         None => "0.0.0.0:8080".into(),
     };
 
+    let username = match matcher.opt_str("u") {
+        Some(u) => u,
+        None => "".into(),
+    };
+
+    let password = match matcher.opt_str("p") {
+        Some(p) => p,
+        None => "".into(),
+    };
+    
     let rt = Builder::new_current_thread().enable_all().build().unwrap();
     rt.block_on(async {
-        let listener = TcpListener::bind(&addr).await.unwrap();
-        linstener_work(&listener).await;
+        let l = TcpListener::bind(&addr).await.unwrap();
+        let server = Server::new(addr, username, password, l);
+        server.listener_work().await;
     });
 }

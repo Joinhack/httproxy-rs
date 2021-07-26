@@ -6,12 +6,15 @@ use httparse::{self, Status};
 use std::mem::MaybeUninit;
 use std::net::SocketAddr;
 
+use crate::Server;
+
 const MIN_SIZE_HEADERS: usize = 32;
 const MAX_SIZE_HEADERS: usize = 256;
 
 pub(crate) struct Connect {
     stream: TcpStream,
     buf: BytesMut,
+    server: Server,
     path_indices: (usize, usize),
     header_indices: Option<Vec<HeaderIndices>>,
     http_version: u8,
@@ -26,9 +29,10 @@ struct HeaderIndices {
 }
 
 impl Connect {
-    pub fn new(stream: TcpStream) -> Self {
+    pub fn new(stream: TcpStream, server: Server) -> Self {
         Connect {
             stream,
+            server,
             path_indices: (0, 0),
             header_indices: None,
             is_connect_method: false,
@@ -97,7 +101,7 @@ impl Connect {
         Some(remote_stream)
     }
 
-    fn get_host_port<'a>(&self, bs: &'a [u8]) -> (&'a str, String) {
+    fn get_host_port<'b>(&self, bs: &'b [u8]) -> (&'b str, String) {
         let raw_host = {
             if self.is_connect_method {
                 unsafe {
