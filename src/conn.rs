@@ -117,8 +117,8 @@ impl Connect {
                     .rev()
                     .find(|h| bs[h.name.0..h.name.1] == b"Host"[..])
                     .expect("no host found in headers");
-                unsafe { 
-                    let bs = &bs[host.val.0 .. host.val.1];
+                unsafe {
+                    let bs = &bs[host.val.0..host.val.1];
                     std::str::from_utf8_unchecked(bs)
                 }
             }

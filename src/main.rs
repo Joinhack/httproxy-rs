@@ -16,8 +16,8 @@ struct Server {
 
 struct ServerInner {
     listener_addr: String,
-    username: String,
-    password: String,
+    username: Option<String>,
+    password: Option<String>,
     listener: TcpListener,
 }
 
@@ -27,7 +27,6 @@ impl Server {
         username: String,
         password: String,
         listener: TcpListener,
-        
     ) -> Server {
         Server {
             inner: Arc::new(ServerInner {
@@ -35,14 +34,13 @@ impl Server {
                 listener,
                 username,
                 password,
-            })
+            }),
         }
     }
 
     fn listener_addr_ref(&self) -> &str {
         &self.inner.listener_addr
     }
-
 
     fn listener_ref(&self) -> &TcpListener {
         &self.inner.listener
@@ -88,18 +86,8 @@ fn main() {
         "set listener address default:0.0.0.0:8080",
         "Listener",
     );
-    opts.optopt(
-        "p",
-        "",
-        "set password",
-        "Password",
-    );
-    opts.optopt(
-        "u",
-        "",
-        "set username",
-        "Username",
-    );
+    opts.optopt("p", "", "set password", "Password");
+    opts.optopt("u", "", "set username", "Username");
     let matcher = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(_) => {
@@ -113,16 +101,10 @@ fn main() {
         None => "0.0.0.0:8080".into(),
     };
 
-    let username = match matcher.opt_str("u") {
-        Some(u) => u,
-        None => "".into(),
-    };
+    let username = matcher.opt_str("u");
 
-    let password = match matcher.opt_str("p") {
-        Some(p) => p,
-        None => "".into(),
-    };
-    
+    let password = matcher.opt_str("p");
+
     let rt = Builder::new_current_thread().enable_all().build().unwrap();
     rt.block_on(async {
         let l = TcpListener::bind(&addr).await.unwrap();
