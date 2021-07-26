@@ -39,13 +39,18 @@ fn print_usage(prg: &str, opts: &Options) {
 fn main() {
     let args = env::args().collect::<Vec<String>>();
     let mut opts = Options::new();
-    opts.optopt("l", "", "set listener address default:0.0.0.0:8080", "Listener");
+    opts.optopt(
+        "l",
+        "",
+        "set listener address default:0.0.0.0:8080",
+        "Listener",
+    );
     let matcher = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(_) => {
             print_usage(&args[0], &opts);
             return;
-        },
+        }
     };
 
     let addr = match matcher.opt_str("l") {
