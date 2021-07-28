@@ -79,7 +79,7 @@ impl Connect {
                     return Err(e.to_string());
                 }
             };
-            //println!("{}", unsafe { std::str::from_utf8_unchecked(bs) });
+            
             self.is_connect_method = if let Some("CONNECT") = req.method {
                 true
             } else {
