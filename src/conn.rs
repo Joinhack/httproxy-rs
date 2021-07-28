@@ -1,6 +1,7 @@
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
+use base64;
 use bytes::BytesMut;
 use httparse::{self, Status};
 use std::mem::MaybeUninit;
@@ -11,11 +12,15 @@ use crate::Server;
 const MIN_SIZE_HEADERS: usize = 32;
 const MAX_SIZE_HEADERS: usize = 256;
 
+const FORBIT: &[u8] =
+    b"HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"Access Unauthorized\"\r\n";
+
 pub(crate) struct Connect {
     stream: TcpStream,
     buf: BytesMut,
     server: Server,
     path_indices: (usize, usize),
+    host_indices: HeaderIndices,
     header_indices: Option<Vec<HeaderIndices>>,
     http_version: u8,
     is_connect_method: bool,
@@ -30,9 +35,14 @@ struct HeaderIndices {
 
 impl Connect {
     pub fn new(stream: TcpStream, server: Server) -> Self {
+        let host_indices = HeaderIndices {
+            name: (0, 0),
+            val: (0, 0),
+        };
         Connect {
             stream,
             server,
+            host_indices,
             path_indices: (0, 0),
             header_indices: None,
             is_connect_method: false,
@@ -69,6 +79,7 @@ impl Connect {
                     return Err(e.to_string());
                 }
             };
+            //println!("{}", unsafe { std::str::from_utf8_unchecked(bs) });
             self.is_connect_method = if let Some("CONNECT") = req.method {
                 true
             } else {
@@ -92,9 +103,56 @@ impl Connect {
         }
     }
 
-    async fn handle_connect(&self) -> Option<TcpStream> {
+    async fn handle_auth(&mut self) -> bool {
+        let bs = &self.buf;
+        let mut auth_header: Option<HeaderIndices> = None;
+        for h in self.header_indices.as_ref().unwrap().iter() {
+            let header = &bs[h.name.0..h.name.1];
+            if header == &b"Host"[..] {
+                self.host_indices = h.clone();
+            }
+
+            if header == &b"Authorization"[..] {
+                auth_header = Some(h.clone());
+            }
+        }
+
+        if self.server.get_username_ref().is_none() {
+            return true;
+        } else {
+            if auth_header.is_some() {
+                let auth_header = auth_header.unwrap();
+                if auth_header.val.1 - auth_header.val.0 > 6 {
+                    let v = match base64::decode(&bs[auth_header.val.0 + 6..auth_header.val.1]) {
+                        Ok(v) => v,
+                        Err(_) => {
+                            let _ = self.stream.write_all(FORBIT).await;
+                            return false;
+                        }
+                    };
+                    let user_passwd = unsafe { std::str::from_utf8_unchecked(&v) };
+                    let user_passwd: Vec<&str> = user_passwd.split(':').collect();
+                    if user_passwd.len() > 1 {
+                        let username = self.server.get_username_ref().as_ref().unwrap();
+                        let password = match self.server.get_password_ref().as_ref() {
+                            Some(x) => x,
+                            None => "",
+                        };
+                        if user_passwd[0] == username && user_passwd[1] == password {
+                            return true;
+                        }
+                    }
+                }
+            }
+            let _ = self.stream.write_all(FORBIT).await;
+            return false;
+        }
+    }
+
+    async fn handle_remote(&self) -> Option<TcpStream> {
         let bs = &self.buf;
         let (raw_host, remote) = self.get_host_port(bs);
+        println!("remote {}", remote);
         let remote_stream = TcpStream::connect(remote)
             .await
             .expect(&format!("connect host:{} error", raw_host));
@@ -109,18 +167,9 @@ impl Connect {
                     std::str::from_utf8_unchecked(bs)
                 }
             } else {
-                let host = self
-                    .header_indices
-                    .as_ref()
-                    .unwrap()
-                    .iter()
-                    .rev()
-                    .find(|h| bs[h.name.0..h.name.1] == b"Host"[..])
-                    .expect("no host found in headers");
-                unsafe {
-                    let bs = &bs[host.val.0..host.val.1];
-                    std::str::from_utf8_unchecked(bs)
-                }
+                let host = &self.host_indices;
+                let bs = &bs[host.val.0..host.val.1];
+                unsafe { std::str::from_utf8_unchecked(bs) }
             }
         };
 
@@ -141,7 +190,10 @@ impl Connect {
             eprintln!("{}", e);
             return;
         }
-        self.remote = self.handle_connect().await;
+        if !self.handle_auth().await {
+            return;
+        }
+        self.remote = self.handle_remote().await;
         self.copy_bidirectional().await;
     }
 

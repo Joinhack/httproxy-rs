@@ -10,3 +10,4 @@ tokio = {version = "1", features = ["net", "rt", "io-std","io-util"]}
 httparse = "1"
 bytes = "1"
 getopts = "0.2"
+base64 = "0.13"

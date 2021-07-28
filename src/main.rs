@@ -24,8 +24,8 @@ struct ServerInner {
 impl Server {
     fn new(
         listener_addr: String,
-        username: String,
-        password: String,
+        username: Option<String>,
+        password: Option<String>,
         listener: TcpListener,
     ) -> Server {
         Server {
@@ -44,6 +44,14 @@ impl Server {
 
     fn listener_ref(&self) -> &TcpListener {
         &self.inner.listener
+    }
+
+    fn get_username_ref(&self) -> &Option<String> {
+        &self.inner.username
+    }
+
+    fn get_password_ref(&self) -> &Option<String> {
+        &self.inner.password
     }
 
     async fn listener_work(&self) {
@@ -109,6 +117,7 @@ fn main() {
     rt.block_on(async {
         let l = TcpListener::bind(&addr).await.unwrap();
         let server = Server::new(addr, username, password, l);
+        println!("server listen on {}", server.listener_addr_ref());
         server.listener_work().await;
     });
 }
