@@ -46,12 +46,18 @@ impl Server {
         &self.inner.listener
     }
 
-    fn get_username_ref(&self) -> Option<&String> {
-        self.inner.username.as_ref()
+    fn get_username_ref(&self) -> Option<&str> {
+        match self.inner.username.as_ref() {
+            Some(ref s) => Some(s.as_str()),
+            None => None,
+        }
     }
 
-    fn get_password_ref(&self) -> Option<&String> {
-        self.inner.password.as_ref()
+    fn get_password_ref(&self) -> Option<&str> {
+        match self.inner.password.as_ref() {
+            Some(ref s) => Some(s.as_str()),
+            None => None,
+        }
     }
 
     async fn listener_work(&self) {
