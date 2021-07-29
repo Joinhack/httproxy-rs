@@ -7,7 +7,7 @@ use httparse::{self, Status};
 use std::mem::MaybeUninit;
 use std::net::SocketAddr;
 
-use crate::Server;
+use super::Server;
 
 const MIN_SIZE_HEADERS: usize = 32;
 const MAX_SIZE_HEADERS: usize = 256;
