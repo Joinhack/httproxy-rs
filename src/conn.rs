@@ -79,7 +79,7 @@ impl Connect {
                     return Err(e.to_string());
                 }
             };
-            println!("{}", unsafe { std::str::from_utf8_unchecked(bs) });
+            //println!("{}", unsafe { std::str::from_utf8_unchecked(bs) });
             self.is_connect_method = if let Some("CONNECT") = req.method {
                 true
             } else {
@@ -151,7 +151,6 @@ impl Connect {
     async fn handle_remote(&self) -> Option<TcpStream> {
         let bs = &self.buf;
         let (raw_host, remote) = self.get_host_port(bs);
-        println!("remote {}", remote);
         let remote_stream = TcpStream::connect(remote)
             .await
             .expect(&format!("connect host:{} error", raw_host));
