@@ -79,7 +79,7 @@ impl Connect {
                     return Err(e.to_string());
                 }
             };
-            
+            println!("{}", unsafe { std::str::from_utf8_unchecked(bs) });
             self.is_connect_method = if let Some("CONNECT") = req.method {
                 true
             } else {
@@ -120,7 +120,7 @@ impl Connect {
         if self.server.get_username_ref().is_none() {
             return true;
         } else {
-            if auth_header.is_some() {
+            if auth_header.is_some()  {
                 let auth_header = auth_header.unwrap();
                 if auth_header.val.1 - auth_header.val.0 > 6 {
                     let v = match base64::decode(&bs[auth_header.val.0 + 6..auth_header.val.1]) {
@@ -133,8 +133,8 @@ impl Connect {
                     let user_passwd = unsafe { std::str::from_utf8_unchecked(&v) };
                     let user_passwd: Vec<&str> = user_passwd.split(':').collect();
                     if user_passwd.len() > 1 {
-                        let username = self.server.get_username_ref().as_ref().unwrap();
-                        let password = match self.server.get_password_ref().as_ref() {
+                        let username = self.server.get_username_ref().unwrap();
+                        let password = match self.server.get_password_ref() {
                             Some(x) => x,
                             None => "",
                         };

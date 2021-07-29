@@ -46,12 +46,12 @@ impl Server {
         &self.inner.listener
     }
 
-    fn get_username_ref(&self) -> &Option<String> {
-        &self.inner.username
+    fn get_username_ref(&self) -> Option<&String> {
+        self.inner.username.as_ref()
     }
 
-    fn get_password_ref(&self) -> &Option<String> {
-        &self.inner.password
+    fn get_password_ref(&self) -> Option<&String> {
+        self.inner.password.as_ref()
     }
 
     async fn listener_work(&self) {
