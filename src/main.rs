@@ -47,14 +47,14 @@ impl Server {
     }
 
     fn get_username_ref(&self) -> Option<&str> {
-        match self.inner.username.as_ref() {
+        match self.inner.username {
             Some(ref s) => Some(s.as_str()),
             None => None,
         }
     }
 
     fn get_password_ref(&self) -> Option<&str> {
-        match self.inner.password.as_ref() {
+        match self.inner.password {
             Some(ref s) => Some(s.as_str()),
             None => None,
         }
