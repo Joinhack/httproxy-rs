@@ -13,7 +13,7 @@ const MIN_SIZE_HEADERS: usize = 32;
 const MAX_SIZE_HEADERS: usize = 256;
 
 const FORBIT: &[u8] =
-    b"HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"Access Unauthorized\"\r\n";
+    b"HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"Access Unauthorized\"\r\n";
 
 pub(crate) struct Connect {
     stream: TcpStream,
@@ -111,8 +111,7 @@ impl Connect {
             if header == &b"Host"[..] {
                 self.host_indices = h.clone();
             }
-
-            if header == &b"Authorization"[..] {
+            if header == &b"Proxy-Authorization"[..] {
                 auth_header = Some(h.clone());
             }
         }
