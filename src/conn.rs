@@ -12,8 +12,8 @@ use super::Server;
 const MIN_SIZE_HEADERS: usize = 32;
 const MAX_SIZE_HEADERS: usize = 256;
 
-const FORBIT: &[u8] =
-    b"HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"Access Unauthorized\"\r\n";
+const FORBIT: &str =
+    "407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"Access Unauthorized\"\r\n";
 
 pub(crate) struct Connect {
     stream: TcpStream,
@@ -50,6 +50,10 @@ impl Connect {
             buf: BytesMut::with_capacity(1024),
             remote: None,
         }
+    }
+
+    fn http_version(&self) -> String {
+        format!("HTTP/1.{}", self.http_version)
     }
 
     pub async fn process_header(&mut self, addr: &SocketAddr) -> Result<(), String> {
@@ -119,13 +123,16 @@ impl Connect {
         if self.server.get_username_ref().is_none() {
             return true;
         } else {
-            if auth_header.is_some()  {
+            if auth_header.is_some() {
                 let auth_header = auth_header.unwrap();
                 if auth_header.val.1 - auth_header.val.0 > 6 {
                     let v = match base64::decode(&bs[auth_header.val.0 + 6..auth_header.val.1]) {
                         Ok(v) => v,
                         Err(_) => {
-                            let _ = self.stream.write_all(FORBIT).await;
+                            let _ = self
+                                .stream
+                                .write_all(format!("{} {}", self.http_version(), FORBIT).as_bytes())
+                                .await;
                             return false;
                         }
                     };
@@ -143,7 +150,10 @@ impl Connect {
                     }
                 }
             }
-            let _ = self.stream.write_all(FORBIT).await;
+            let _ = self
+                .stream
+                .write_all(format!("{} {}", self.http_version(), FORBIT).as_bytes())
+                .await;
             return false;
         }
     }
@@ -196,16 +206,14 @@ impl Connect {
     }
 
     async fn copy_bidirectional(&mut self) {
+        let version = self.http_version();
         let stream: &mut TcpStream = &mut self.stream;
         let remote = self.remote.as_mut().unwrap();
         if self.is_connect_method {
             stream
                 .write_all(
-                    format!(
-                        "HTTP/1.{} 200 Connection Established\r\n\r\n",
-                        self.http_version
-                    )
-                    .as_bytes(),
+                    format!("{} 200 Connection Established\r\n\r\n", version)
+                        .as_bytes(),
                 )
                 .await
                 .unwrap();
