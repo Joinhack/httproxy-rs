@@ -210,22 +210,27 @@ impl Connect {
         &self.stream.shutdown().await;
     }
 
-    async fn copy_bidirectional(&mut self) -> Result<(u64, u64), std::io::Error> {
+    async fn copy_bidirectional(&mut self) {
         let version = self.http_version();
         let stream: &mut TcpStream = &mut self.stream;
         let remote = self.remote.as_mut().unwrap();
         if self.is_connect_method {
-            stream
+            let rs = stream
                 .write_all(
                     format!("{} 200 Connection Established\r\n\r\n", version)
                         .as_bytes(),
                 )
-                .await
-                .unwrap();
+                .await;
+            if rs.is_err() {
+                return;
+            }
         } else {
-            remote.write_all(&self.buf[..]).await.unwrap();
+            let rs = remote.write_all(&self.buf[..]).await;
+            if rs.is_err() {
+                return;
+            }
         }
-        io::copy_bidirectional(stream, remote).await
+        io::copy_bidirectional(stream, remote).await;
     }
 }
 
