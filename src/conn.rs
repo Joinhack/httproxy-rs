@@ -5,7 +5,7 @@ use base64;
 use bytes::BytesMut;
 use httparse::{self, Status};
 use std::mem::MaybeUninit;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, Shutdown};
 
 use super::Server;
 
@@ -161,10 +161,9 @@ impl Connect {
     async fn handle_remote(&self) -> Option<TcpStream> {
         let bs = &self.buf;
         let (raw_host, remote) = self.get_host_port(bs);
-        let remote_stream = TcpStream::connect(remote)
+        TcpStream::connect(remote)
             .await
-            .expect(&format!("connect host:{} error", raw_host));
-        Some(remote_stream)
+            .ok()
     }
 
     fn get_host_port<'b>(&self, bs: &'b [u8]) -> (&'b str, String) {
@@ -202,10 +201,16 @@ impl Connect {
             return;
         }
         self.remote = self.handle_remote().await;
-        self.copy_bidirectional().await;
+        if self.remote.is_some() {
+            self.copy_bidirectional().await;
+        }
+        if self.remote.is_some() {
+            self.remote.as_mut().unwrap().shutdown().await;
+        }
+        &self.stream.shutdown().await;
     }
 
-    async fn copy_bidirectional(&mut self) {
+    async fn copy_bidirectional(&mut self) -> Result<(u64, u64), std::io::Error> {
         let version = self.http_version();
         let stream: &mut TcpStream = &mut self.stream;
         let remote = self.remote.as_mut().unwrap();
@@ -220,7 +225,7 @@ impl Connect {
         } else {
             remote.write_all(&self.buf[..]).await.unwrap();
         }
-        let _ = io::copy_bidirectional(stream, remote).await.unwrap();
+        io::copy_bidirectional(stream, remote).await
     }
 }
 
