@@ -4,7 +4,8 @@ use tokio::net::TcpStream;
 use base64;
 use bytes::BytesMut;
 use httparse::{self, Status};
-use std::mem::MaybeUninit;
+use std::mem::{MaybeUninit, self};
+
 use std::net::{SocketAddr, Shutdown};
 
 use super::Server;
