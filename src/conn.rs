@@ -4,9 +4,9 @@ use tokio::net::TcpStream;
 use base64;
 use bytes::BytesMut;
 use httparse::{self, Status};
-use std::mem::{MaybeUninit, self};
+use std::mem::{MaybeUninit};
 
-use std::net::{SocketAddr, Shutdown};
+use std::net::{SocketAddr};
 
 use super::Server;
 
@@ -161,7 +161,7 @@ impl Connect {
 
     async fn handle_remote(&self) -> Option<TcpStream> {
         let bs = &self.buf;
-        let (raw_host, remote) = self.get_host_port(bs);
+        let (_, remote) = self.get_host_port(bs);
         TcpStream::connect(remote)
             .await
             .ok()
@@ -205,10 +205,10 @@ impl Connect {
         if self.remote.is_some() {
             self.copy_bidirectional().await;
         }
-        if self.remote.is_some() {
-            self.remote.as_mut().unwrap().shutdown().await;
-        }
-        &self.stream.shutdown().await;
+        // if self.remote.is_some() {
+        //     self.remote.as_mut().unwrap().shutdown().await;
+        // }
+        // &self.stream.shutdown().await;
     }
 
     async fn copy_bidirectional(&mut self) {
@@ -231,7 +231,7 @@ impl Connect {
                 return;
             }
         }
-        io::copy_bidirectional(stream, remote).await;
+        let _ = io::copy_bidirectional(stream, remote).await;
     }
 }
 
