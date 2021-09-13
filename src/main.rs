@@ -1,4 +1,3 @@
-use std::panic::{set_hook, PanicInfo};
 use tokio::net::TcpListener;
 use tokio::runtime::Builder;
 
@@ -67,22 +66,9 @@ impl Server {
             let server = self.clone();
             tokio::spawn(async move {
                 let mut conn = Connect::new(tcp_stream, server);
-                set_hook(Box::new(panic_hook));
                 conn.process_remote(addr).await;
             });
         }
-    }
-}
-
-fn panic_hook(info: &PanicInfo<'_>) {
-    if let Some(s) = info.payload().downcast_ref::<String>() {
-        if let Some(loc) = info.location() {
-            eprintln!("file:{}:{} {}", loc.file(), loc.line(), s);
-        } else {
-            eprintln!("{}", s);
-        }
-    } else {
-        eprintln!("{:?}", info);
     }
 }
 
