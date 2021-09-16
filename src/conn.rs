@@ -164,7 +164,6 @@ impl Connect {
             if remote == self.server.listener_addr_ref() {
                 return None
             }
-            println!("{}", remote);
             TcpStream::connect(remote)
                 .await
                 .ok()
