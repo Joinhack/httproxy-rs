@@ -84,7 +84,6 @@ impl Connect {
                     return Err(e.to_string());
                 }
             };
-            //println!("{}", unsafe { std::str::from_utf8_unchecked(bs) });
             self.is_connect_method = if let Some("CONNECT") = req.method {
                 true
             } else {
@@ -161,25 +160,37 @@ impl Connect {
 
     async fn handle_remote(&self) -> Option<TcpStream> {
         let bs = &self.buf;
-        let (_, remote) = self.get_host_port(bs);
-        TcpStream::connect(remote)
-            .await
-            .ok()
+        if let Some((_, remote)) = self.get_host_port(bs) {
+            if remote == self.server.listener_addr_ref() {
+                return None
+            }
+            println!("{}", remote);
+            TcpStream::connect(remote)
+                .await
+                .ok()
+        } else {
+            None
+        }
     }
 
-    fn get_host_port<'b>(&self, bs: &'b [u8]) -> (&'b str, String) {
+    fn get_host_port<'b>(&self, bs: &'b [u8]) -> Option<(&'b str, String)> {
         let raw_host = {
+            let path = unsafe {
+                let bs: &[u8] = &bs[self.path_indices.0..self.path_indices.1];
+                std::str::from_utf8_unchecked(bs)
+            };
             if self.is_connect_method {
-                unsafe {
-                    let bs: &[u8] = &bs[self.path_indices.0..self.path_indices.1];
-                    std::str::from_utf8_unchecked(bs)
-                }
+                path
             } else {
                 let host = &self.host_indices;
                 let bs = &bs[host.val.0..host.val.1];
                 unsafe { std::str::from_utf8_unchecked(bs) }
             }
         };
+
+        if raw_host == "" {
+            return None
+        }
 
         let hosts = raw_host.split(":").collect::<Vec<&str>>();
         let port = if hosts.len() == 2 {
@@ -188,9 +199,13 @@ impl Connect {
         } else {
             80
         };
+        
         let host = hosts[0];
+        if host == "127.0.0.1" || host == "localhost" {
+            return None
+        }
         let remote = format!("{}:{}", host, port);
-        (raw_host, remote)
+        Some((raw_host, remote))
     }
 
     pub async fn process_remote(&mut self, addr: SocketAddr) {
@@ -205,10 +220,6 @@ impl Connect {
         if self.remote.is_some() {
             self.copy_bidirectional().await;
         }
-        // if self.remote.is_some() {
-        //     self.remote.as_mut().unwrap().shutdown().await;
-        // }
-        // &self.stream.shutdown().await;
     }
 
     async fn copy_bidirectional(&mut self) {
